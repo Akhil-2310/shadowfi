@@ -26,10 +26,26 @@ async function main() {
     return;
   }
 
+  // Fast path: a raw DEPLOYER_PRIVATE_KEY in .env skips the encrypted-key + password flow.
+  if (process.env.DEPLOYER_PRIVATE_KEY) {
+    const hardhat = spawn("hardhat", ["deploy", ...process.argv.slice(2)], {
+      stdio: "inherit",
+      env: process.env,
+      shell: process.platform === "win32",
+    });
+
+    hardhat.on("exit", code => {
+      process.exit(code || 0);
+    });
+    return;
+  }
+
   const encryptedKey = process.env.DEPLOYER_PRIVATE_KEY_ENCRYPTED;
 
   if (!encryptedKey) {
-    console.log("🚫️ You don't have a deployer account. Run `yarn generate` or `yarn account:import` first");
+    console.log(
+      "🚫️ No deployer key found. Either set DEPLOYER_PRIVATE_KEY in packages/hardhat/.env,\n   or run `yarn generate` / `yarn account:import` to create an encrypted key.",
+    );
     return;
   }
 

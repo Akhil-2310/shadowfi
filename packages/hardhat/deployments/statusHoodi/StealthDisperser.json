@@ -1,0 +1,127 @@
+{
+  "address": "0xca45Eb8CF0fB1Ad779148E3fe15820AD0beD375b",
+  "abi": [
+    {
+      "inputs": [],
+      "name": "LengthMismatch",
+      "type": "error"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "expected",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "provided",
+          "type": "uint256"
+        }
+      ],
+      "name": "TotalMismatch",
+      "type": "error"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "to",
+          "type": "address"
+        }
+      ],
+      "name": "TransferFailed",
+      "type": "error"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "sender",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "recipients",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "total",
+          "type": "uint256"
+        }
+      ],
+      "name": "Dispersed",
+      "type": "event"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address[]",
+          "name": "recipients",
+          "type": "address[]"
+        },
+        {
+          "internalType": "uint256[]",
+          "name": "amounts",
+          "type": "uint256[]"
+        }
+      ],
+      "name": "batch",
+      "outputs": [],
+      "stateMutability": "payable",
+      "type": "function"
+    }
+  ],
+  "transactionHash": "0x81a99cbbf209a602552473a6e5b54546b10bc9c76c3c6805b978c7d86c6648e7",
+  "receipt": {
+    "to": null,
+    "from": "0x8b916003D0C8F1f468a720BA4Ab5EA9678bc6e61",
+    "contractAddress": "0xca45Eb8CF0fB1Ad779148E3fe15820AD0beD375b",
+    "transactionIndex": 1,
+    "gasUsed": "239170",
+    "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "blockHash": "0x19e8b344e1d6bc739cf532553a645e0ac391ce5133a3e0290302cf75b5505d8c",
+    "transactionHash": "0x81a99cbbf209a602552473a6e5b54546b10bc9c76c3c6805b978c7d86c6648e7",
+    "logs": [],
+    "blockNumber": 1206039,
+    "cumulativeGasUsed": "260170",
+    "status": 1,
+    "byzantium": true
+  },
+  "args": [],
+  "numDeployments": 1,
+  "solcInputHash": "d7678f9cb8766b1713b7b455412aa129",
+  "metadata": "{\"compiler\":{\"version\":\"0.8.24+commit.e11b9ed9\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"inputs\":[],\"name\":\"LengthMismatch\",\"type\":\"error\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"expected\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"provided\",\"type\":\"uint256\"}],\"name\":\"TotalMismatch\",\"type\":\"error\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"to\",\"type\":\"address\"}],\"name\":\"TransferFailed\",\"type\":\"error\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"address\",\"name\":\"sender\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"recipients\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"total\",\"type\":\"uint256\"}],\"name\":\"Dispersed\",\"type\":\"event\"},{\"inputs\":[{\"internalType\":\"address[]\",\"name\":\"recipients\",\"type\":\"address[]\"},{\"internalType\":\"uint256[]\",\"name\":\"amounts\",\"type\":\"uint256[]\"}],\"name\":\"batch\",\"outputs\":[],\"stateMutability\":\"payable\",\"type\":\"function\"}],\"devdoc\":{\"kind\":\"dev\",\"methods\":{},\"title\":\"StealthDisperser\",\"version\":1},\"userdoc\":{\"events\":{\"Dispersed(address,uint256,uint256)\":{\"notice\":\"Emitted once per batch, useful for indexers to recognize         disperser-originated sends without re-parsing calldata.\"}},\"kind\":\"user\",\"methods\":{\"batch(address[],uint256[])\":{\"notice\":\"Send `amounts[i]` ETH to `recipients[i]` for all i, in one tx.         `msg.value` must equal `sum(amounts)` exactly.\"}},\"notice\":\"Minimal permissionless helper used by the BucketLending UI to top up         many stealth addresses in a single transaction. Why this exists:   - When Status Network does not grant a stealth the gasless tier (no Karma),     the stealth needs a small ETH top-up to submit its loan permit. Doing     one `main -> stealth` transfer per loan trivially tags each stealth with     the Karma holder's main wallet and leaks the bucket size via the top-up     amount.   - Funneling all top-ups through a single `batch(...)` call at least:       * hides which recipient corresponds to which loan (observers see a         set of recipients, not per-recipient intent),       * lets the UI include decoy recipients to dilute correlation,       * normalizes the per-recipient amount so the top-up no longer         telegraphs the specific tx cost it is about to pay for. Security notes:   - Stateless and permissionless \\u2014 anyone can call.   - Reverts if totals don't match msg.value, so no dust can get stuck.   - Reverts if any transfer fails; the whole batch is atomic.   - No fallback / no storage \\u2014 gas profile is exactly transfers + arith.\",\"version\":1}},\"settings\":{\"compilationTarget\":{\"contracts/StealthDisperser.sol\":\"StealthDisperser\"},\"evmVersion\":\"paris\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"ipfs\",\"useLiteralContent\":true},\"optimizer\":{\"enabled\":true,\"runs\":200},\"remappings\":[]},\"sources\":{\"contracts/StealthDisperser.sol\":{\"content\":\"// SPDX-License-Identifier: MIT\\npragma solidity ^0.8.24;\\n\\n/// @title StealthDisperser\\n/// @notice Minimal permissionless helper used by the BucketLending UI to top up\\n///         many stealth addresses in a single transaction.\\n///\\n/// Why this exists:\\n///   - When Status Network does not grant a stealth the gasless tier (no Karma),\\n///     the stealth needs a small ETH top-up to submit its loan permit. Doing\\n///     one `main -> stealth` transfer per loan trivially tags each stealth with\\n///     the Karma holder's main wallet and leaks the bucket size via the top-up\\n///     amount.\\n///   - Funneling all top-ups through a single `batch(...)` call at least:\\n///       * hides which recipient corresponds to which loan (observers see a\\n///         set of recipients, not per-recipient intent),\\n///       * lets the UI include decoy recipients to dilute correlation,\\n///       * normalizes the per-recipient amount so the top-up no longer\\n///         telegraphs the specific tx cost it is about to pay for.\\n///\\n/// Security notes:\\n///   - Stateless and permissionless \\u2014 anyone can call.\\n///   - Reverts if totals don't match msg.value, so no dust can get stuck.\\n///   - Reverts if any transfer fails; the whole batch is atomic.\\n///   - No fallback / no storage \\u2014 gas profile is exactly transfers + arith.\\ncontract StealthDisperser {\\n    error LengthMismatch();\\n    error TotalMismatch(uint256 expected, uint256 provided);\\n    error TransferFailed(address to);\\n\\n    /// @notice Emitted once per batch, useful for indexers to recognize\\n    ///         disperser-originated sends without re-parsing calldata.\\n    event Dispersed(address indexed sender, uint256 recipients, uint256 total);\\n\\n    /// @notice Send `amounts[i]` ETH to `recipients[i]` for all i, in one tx.\\n    ///         `msg.value` must equal `sum(amounts)` exactly.\\n    function batch(address[] calldata recipients, uint256[] calldata amounts) external payable {\\n        uint256 len = recipients.length;\\n        if (len != amounts.length) revert LengthMismatch();\\n\\n        uint256 total;\\n        for (uint256 i = 0; i < len; ++i) {\\n            total += amounts[i];\\n        }\\n        if (total != msg.value) revert TotalMismatch(total, msg.value);\\n\\n        for (uint256 i = 0; i < len; ++i) {\\n            (bool ok, ) = payable(recipients[i]).call{ value: amounts[i] }(\\\"\\\");\\n            if (!ok) revert TransferFailed(recipients[i]);\\n        }\\n\\n        emit Dispersed(msg.sender, len, total);\\n    }\\n}\\n\",\"keccak256\":\"0xccb8c6b5dbf8a050d5d9fe848fcfaa001723b8c7910bbf601ec2a17c87b6d654\",\"license\":\"MIT\"}},\"version\":1}",
+  "bytecode": "0x608060405234801561001057600080fd5b5061035d806100206000396000f3fe60806040526004361061001e5760003560e01c8063c00c4e9e14610023575b600080fd5b61003661003136600461024e565b610038565b005b8281811461005c576040516001621398b960e31b0319815260040160405180910390fd5b6000805b828110156100965784848281811061007a5761007a6102ba565b905060200201358261008c91906102d0565b9150600101610060565b503481146100c5576040516306f4750f60e41b8152600481018290523460248201526044015b60405180910390fd5b60005b828110156101be5760008787838181106100e4576100e46102ba565b90506020020160208101906100f991906102f7565b6001600160a01b0316868684818110610114576101146102ba565b9050602002013560405160006040518083038185875af1925050503d806000811461015b576040519150601f19603f3d011682016040523d82523d6000602084013e610160565b606091505b50509050806101b55787878381811061017b5761017b6102ba565b905060200201602081019061019091906102f7565b6040516339f1c8d960e01b81526001600160a01b0390911660048201526024016100bc565b506001016100c8565b50604080518381526020810183905233917f673fa02b7d0def5a48e6b957aec10552b6f6464d918bf76d0f22a6b3edb9b434910160405180910390a2505050505050565b60008083601f84011261021457600080fd5b50813567ffffffffffffffff81111561022c57600080fd5b6020830191508360208260051b850101111561024757600080fd5b9250929050565b6000806000806040858703121561026457600080fd5b843567ffffffffffffffff8082111561027c57600080fd5b61028888838901610202565b909650945060208701359150808211156102a157600080fd5b506102ae87828801610202565b95989497509550505050565b634e487b7160e01b600052603260045260246000fd5b808201808211156102f157634e487b7160e01b600052601160045260246000fd5b92915050565b60006020828403121561030957600080fd5b81356001600160a01b038116811461032057600080fd5b939250505056fea264697066735822122095757f2c882180448b18b5d57b61f1116c1958a9a173c0966a3a046a3025656364736f6c63430008180033",
+  "deployedBytecode": "0x60806040526004361061001e5760003560e01c8063c00c4e9e14610023575b600080fd5b61003661003136600461024e565b610038565b005b8281811461005c576040516001621398b960e31b0319815260040160405180910390fd5b6000805b828110156100965784848281811061007a5761007a6102ba565b905060200201358261008c91906102d0565b9150600101610060565b503481146100c5576040516306f4750f60e41b8152600481018290523460248201526044015b60405180910390fd5b60005b828110156101be5760008787838181106100e4576100e46102ba565b90506020020160208101906100f991906102f7565b6001600160a01b0316868684818110610114576101146102ba565b9050602002013560405160006040518083038185875af1925050503d806000811461015b576040519150601f19603f3d011682016040523d82523d6000602084013e610160565b606091505b50509050806101b55787878381811061017b5761017b6102ba565b905060200201602081019061019091906102f7565b6040516339f1c8d960e01b81526001600160a01b0390911660048201526024016100bc565b506001016100c8565b50604080518381526020810183905233917f673fa02b7d0def5a48e6b957aec10552b6f6464d918bf76d0f22a6b3edb9b434910160405180910390a2505050505050565b60008083601f84011261021457600080fd5b50813567ffffffffffffffff81111561022c57600080fd5b6020830191508360208260051b850101111561024757600080fd5b9250929050565b6000806000806040858703121561026457600080fd5b843567ffffffffffffffff8082111561027c57600080fd5b61028888838901610202565b909650945060208701359150808211156102a157600080fd5b506102ae87828801610202565b95989497509550505050565b634e487b7160e01b600052603260045260246000fd5b808201808211156102f157634e487b7160e01b600052601160045260246000fd5b92915050565b60006020828403121561030957600080fd5b81356001600160a01b038116811461032057600080fd5b939250505056fea264697066735822122095757f2c882180448b18b5d57b61f1116c1958a9a173c0966a3a046a3025656364736f6c63430008180033",
+  "devdoc": {
+    "kind": "dev",
+    "methods": {},
+    "title": "StealthDisperser",
+    "version": 1
+  },
+  "userdoc": {
+    "events": {
+      "Dispersed(address,uint256,uint256)": {
+        "notice": "Emitted once per batch, useful for indexers to recognize         disperser-originated sends without re-parsing calldata."
+      }
+    },
+    "kind": "user",
+    "methods": {
+      "batch(address[],uint256[])": {
+        "notice": "Send `amounts[i]` ETH to `recipients[i]` for all i, in one tx.         `msg.value` must equal `sum(amounts)` exactly."
+      }
+    },
+    "notice": "Minimal permissionless helper used by the BucketLending UI to top up         many stealth addresses in a single transaction. Why this exists:   - When Status Network does not grant a stealth the gasless tier (no Karma),     the stealth needs a small ETH top-up to submit its loan permit. Doing     one `main -> stealth` transfer per loan trivially tags each stealth with     the Karma holder's main wallet and leaks the bucket size via the top-up     amount.   - Funneling all top-ups through a single `batch(...)` call at least:       * hides which recipient corresponds to which loan (observers see a         set of recipients, not per-recipient intent),       * lets the UI include decoy recipients to dilute correlation,       * normalizes the per-recipient amount so the top-up no longer         telegraphs the specific tx cost it is about to pay for. Security notes:   - Stateless and permissionless — anyone can call.   - Reverts if totals don't match msg.value, so no dust can get stuck.   - Reverts if any transfer fails; the whole batch is atomic.   - No fallback / no storage — gas profile is exactly transfers + arith.",
+    "version": 1
+  },
+  "storageLayout": {
+    "storage": [],
+    "types": null
+  }
+}

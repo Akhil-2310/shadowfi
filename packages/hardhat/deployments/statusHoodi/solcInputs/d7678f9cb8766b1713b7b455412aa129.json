@@ -1,0 +1,36 @@
+{
+  "language": "Solidity",
+  "sources": {
+    "contracts/StealthDisperser.sol": {
+      "content": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.24;\n\n/// @title StealthDisperser\n/// @notice Minimal permissionless helper used by the BucketLending UI to top up\n///         many stealth addresses in a single transaction.\n///\n/// Why this exists:\n///   - When Status Network does not grant a stealth the gasless tier (no Karma),\n///     the stealth needs a small ETH top-up to submit its loan permit. Doing\n///     one `main -> stealth` transfer per loan trivially tags each stealth with\n///     the Karma holder's main wallet and leaks the bucket size via the top-up\n///     amount.\n///   - Funneling all top-ups through a single `batch(...)` call at least:\n///       * hides which recipient corresponds to which loan (observers see a\n///         set of recipients, not per-recipient intent),\n///       * lets the UI include decoy recipients to dilute correlation,\n///       * normalizes the per-recipient amount so the top-up no longer\n///         telegraphs the specific tx cost it is about to pay for.\n///\n/// Security notes:\n///   - Stateless and permissionless — anyone can call.\n///   - Reverts if totals don't match msg.value, so no dust can get stuck.\n///   - Reverts if any transfer fails; the whole batch is atomic.\n///   - No fallback / no storage — gas profile is exactly transfers + arith.\ncontract StealthDisperser {\n    error LengthMismatch();\n    error TotalMismatch(uint256 expected, uint256 provided);\n    error TransferFailed(address to);\n\n    /// @notice Emitted once per batch, useful for indexers to recognize\n    ///         disperser-originated sends without re-parsing calldata.\n    event Dispersed(address indexed sender, uint256 recipients, uint256 total);\n\n    /// @notice Send `amounts[i]` ETH to `recipients[i]` for all i, in one tx.\n    ///         `msg.value` must equal `sum(amounts)` exactly.\n    function batch(address[] calldata recipients, uint256[] calldata amounts) external payable {\n        uint256 len = recipients.length;\n        if (len != amounts.length) revert LengthMismatch();\n\n        uint256 total;\n        for (uint256 i = 0; i < len; ++i) {\n            total += amounts[i];\n        }\n        if (total != msg.value) revert TotalMismatch(total, msg.value);\n\n        for (uint256 i = 0; i < len; ++i) {\n            (bool ok, ) = payable(recipients[i]).call{ value: amounts[i] }(\"\");\n            if (!ok) revert TransferFailed(recipients[i]);\n        }\n\n        emit Dispersed(msg.sender, len, total);\n    }\n}\n"
+    }
+  },
+  "settings": {
+    "evmVersion": "paris",
+    "optimizer": {
+      "enabled": true,
+      "runs": 200
+    },
+    "outputSelection": {
+      "*": {
+        "*": [
+          "abi",
+          "evm.bytecode",
+          "evm.deployedBytecode",
+          "evm.methodIdentifiers",
+          "metadata",
+          "devdoc",
+          "userdoc",
+          "storageLayout",
+          "evm.gasEstimates"
+        ],
+        "": [
+          "ast"
+        ]
+      }
+    },
+    "metadata": {
+      "useLiteralContent": true
+    }
+  }
+}
