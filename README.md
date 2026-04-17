@@ -2,7 +2,7 @@
 
 **Private, gasless, Karma-gated lending on the Status Network.**
 
-ShadowFi is a privacy-first lending primitive. Borrowers keep their primary identity off-chain and borrow through deterministically derived **stealth addresses**. Credit is underwritten by **Karma** (Status Network's non-transferable reputation), and loans are normalized into **fixed-size buckets** so on-chain observers can see loans — but not *your* loans.
+ShadowFi is a privacy-first lending borrowing primitive. Borrowers keep their primary identity off-chain and borrow through deterministically derived **stealth addresses**. Credit is underwritten by **Karma** (Status Network's non-transferable reputation), and loans are normalized into **fixed-size buckets** so on-chain observers can see loans — but not *your* loans.
 
 It's built to showcase three things that are only practical on Status Network:
 
@@ -10,7 +10,6 @@ It's built to showcase three things that are only practical on Status Network:
 2. **Karma as sybil-resistant, read-only credit** — no collateral, no KYC, no slashing.
 3. **Practical privacy without heavy ZK** — stealth addresses + bucketing + decoys + off-chain signed permits.
 
-> Deployed on **Status Network Hoodi** (chain ID `374`).
 
 ---
 
@@ -149,62 +148,6 @@ Key constants (immutable in code, explicit on purpose):
 | `INTEREST_DISCOUNT_BPS_PER_KARMA` | `10` (0.1%) | Discount off base rate per 1 Karma |
 | `buckets` | `[0.1, 0.5, 1] ETH` | Only these denominations are valid |
 
-Public surface:
-
-```solidity
-function requestLoanWithPermit(
-    address stealth,
-    uint256 bucketAmount,
-    uint256 baseInterestBps,
-    uint256 duration,
-    uint256 deadline,
-    bytes32 salt,
-    bytes calldata signature
-) external returns (uint256 loanId);
-
-function fundLoan(uint256 loanId) external payable;          // anyone
-function repayLoan(uint256 loanId) external payable;         // stealth only
-function cancelLoan(uint256 loanId) external;                // stealth, if still Open
-function markDefault(uint256 loanId) external;               // anyone, after dueTime
-
-// Views: getLoan, getLoans, getLenders, totalOwed, bucketsList,
-// maxBucket, getMaxBorrow(karmaBalance), getAdjustedInterestBps(baseBps, karma)
-```
-
-The `BorrowPermit` EIP-712 struct:
-
-```
-BorrowPermit(
-  address lending,
-  address stealth,
-  uint256 bucketAmount,
-  uint256 baseInterestBps,
-  uint256 duration,
-  uint256 deadline,
-  bytes32 salt
-)
-```
-
-The `lending` field binds a permit to a specific `BucketLending` address, `salt` makes per-loan digests unique, and `permitUsed[digest]` blocks replay. The signer's address is recovered on-chain but **never stored and never emitted** — it only influences the Karma read, the borrow cap check, and the interest discount.
-
-### `StealthDisperser.sol`
-
-54 LOC. Stateless, permissionless, single function:
-
-```solidity
-function batch(address[] calldata recipients, uint256[] calldata amounts) external payable;
-```
-
-Used by the frontend when any stealth address is **not** on the gasless tier. Instead of sending one `main → stealth_i` transfer per loan (which trivially tags each stealth with the main wallet and leaks bucket sizes via top-up amounts), the UI:
-
-1. Picks `N_real + N_decoy` recipients and shuffles them.
-2. Sends a single `disperser.batch(recipients, amounts)` with a **uniform** per-recipient amount rounded up to a coarse tick.
-3. Results in a fan-out where observers see a set of similarly-funded addresses, not per-loan intent.
-
-### `MockKarma.sol`
-
-Local-only Karma stub with `balanceOf` and a dev-only `award(...)` helper. **Never deployed on Hoodi** — the deploy script points at the real Karma at `0x0700be6f329cc48c38144f71c898b72795db6c1b`.
-
 ---
 
 ## Frontend
@@ -288,7 +231,7 @@ yarn next:build            # production build of the frontend
    ```
 
    This will:
-   - **Skip** `MockKarma` and wire `BucketLending` to the real Karma (`0x0700be6f329cc48c38144f71c898b72795db6c1b`).
+   - Deploy `BucketLending` with real Karma (`0x0700be6f329cc48c38144f71c898b72795db6c1b`).
    - Deploy `BucketLending` with buckets `[0.1, 0.5, 1 ETH]`.
    - Deploy `StealthDisperser`.
    - Regenerate `packages/nextjs/contracts/deployedContracts.ts` so the frontend picks up the new addresses automatically.
@@ -307,27 +250,6 @@ yarn next:build            # production build of the frontend
 
    `scaffold.config.ts` already targets `statusHoodi` with a `public.hoodi.rpc.status.network` override.
 
-### Network details
-
-```ts
-{
-  name: "Status Network Hoodi",
-  chainId: 374,
-  rpc:  "https://public.hoodi.rpc.status.network",
-  explorer: "https://hoodiscan.status.network",
-  multicall3: "0xcA11bde05977b3631167028862bE2a173976CA11",
-}
-```
-
-The Karma stack on Hoodi (canonical, fixed by Status):
-
-```ts
-karma:        0x0700be6f329cc48c38144f71c898b72795db6c1b
-karmaTiers:   0xb8039632e089dcefa6bbb1590948926b2463b691
-rln:          0x420077c98880a9ebb45296cf7721ab7a5b56bd47
-stakeManager: 0x2bc5b2a5f580064aab6fbc1ee30113cd808582ac
-```
-
 ---
 
 ## Deployed addresses (Status Hoodi)
@@ -338,25 +260,7 @@ Current live deployment used by the frontend. All ShadowFi contracts are **verif
 | --- | --- | --- |
 | `BucketLending` | [`0x2acd323f5a715Af37b9dC0E5e9d79897c9669d8C`](https://hoodiscan.status.network/address/0x2acd323f5a715Af37b9dC0E5e9d79897c9669d8C#code) | ✅ verified |
 | `StealthDisperser` | [`0xca45Eb8CF0fB1Ad779148E3fe15820AD0beD375b`](https://hoodiscan.status.network/address/0xca45Eb8CF0fB1Ad779148E3fe15820AD0beD375b#code) | ✅ verified |
-| `HelloStatusNetwork` (example) | [`0xED6a5C93d576D4A9F66cc2c0b88fDac4A6ed1717`](https://hoodiscan.status.network/address/0xED6a5C93d576D4A9F66cc2c0b88fDac4A6ed1717#code) | ✅ verified |
-| `Karma` (real, Status team) | [`0x0700be6f329cc48c38144f71c898b72795db6c1b`](https://hoodiscan.status.network/address/0x0700be6f329cc48c38144f71c898b72795db6c1b) | — |
-
-### Verifying on Hoodiscan (Blockscout)
-
-Status Hoodi uses **Blockscout**, not Etherscan. `hardhat-verify` works against it through the `customChains` entry in `hardhat.config.ts` (`https://hoodiscan.status.network/api`). Blockscout accepts any non-empty API key.
-
-```bash
-# No-arg contract:
-yarn hardhat:hardhat-verify --network statusHoodi <ADDRESS>
-
-# Contract with array / complex constructor args — use a JS args file:
-yarn workspace @se-2/hardhat hardhat-verify \
-  --network statusHoodi \
-  --constructor-args scripts/verify-args/bucketLending.js \
-  0x2acd323f5a715Af37b9dC0E5e9d79897c9669d8C
-```
-
-The exact args used for the current `BucketLending` deployment are checked in at `packages/hardhat/scripts/verify-args/bucketLending.js`. When you redeploy with new buckets or a different Karma address, update that file before re-verifying.
+| `Karma` | [`0x0700be6f329cc48c38144f71c898b72795db6c1b`](https://hoodiscan.status.network/address/0x0700be6f329cc48c38144f71c898b72795db6c1b) | ✅ verified |
 
 ---
 
@@ -370,13 +274,6 @@ Be honest about what we do and don't claim:
 - The borrower's Karma-holder address is **never stored** and **never emitted** — only `ecrecover`'d inside a single call.
 - Multi-bucket splits use **independent stealth keypairs** and **fresh EIP-712 salts**, so two loans from the same user are on-chain unrelated.
 - When gasless is unavailable, the **batched disperser** mixes real stealths with decoys and uses a uniform per-recipient amount, breaking the per-loan main→stealth edge.
-
-**What is still observable (and the threat model)**
-
-- The Karma holder's signature sits in the **calldata** of `requestLoanWithPermit`. A determined observer can `ecrecover` it off-chain to recover the signer. Fresh per-permit `salt`s prevent correlation *across* one signer's loans, but do not hide the signer itself. A fully private version requires a ZK proof of "I know an address with Karma ≥ N" — out of scope here.
-- **Lenders are fully on-chain**. `fundLoan` is called from the lender's real wallet. Privacy benefits accrue only to borrowers in this version.
-- **Defaults have no recovery.** Because there's no collateral and no Karma slashing (the real Karma token is read-only for us), lenders bear the full loss on default. This is the correct tradeoff for a privacy-preserving primitive — punishing default via identity-linked slashing would defeat the privacy goal — but it means lending is higher-variance than, say, Aave. Price it in.
-- **Gas top-ups through `StealthDisperser`** still tie the main wallet to the *set* of recipients. It breaks per-loan linkage and hides amounts, not the mere fact that the main wallet has some privacy-preserving activity.
 
 ---
 
