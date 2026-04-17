@@ -303,35 +303,6 @@ Near-term, in order of impact:
 
 ---
 
-## Project layout
-
-```
-korea/
-├── packages/
-│   ├── hardhat/           # Solidity + deploy scripts (see architecture above)
-│   └── nextjs/            # Frontend
-├── .agents/               # AI agent skills + guidance
-├── AGENTS.md              # Coding-agent instructions (SE-2 conventions)
-├── CLAUDE.md              # Pointer to AGENTS.md
-└── README.md              # You are here
-```
-
-Useful yarn scripts (monorepo root):
-
-| Command | What it does |
-| --- | --- |
-| `yarn chain` | Local hardhat node |
-| `yarn deploy [--network X]` | Deploy all, regenerate frontend ABIs |
-| `yarn start` | Next.js dev server |
-| `yarn compile` | Compile contracts |
-| `yarn hardhat:test` | Run contract tests |
-| `yarn lint` / `yarn format` | Lint + format both packages |
-| `yarn next:build` | Production build of the frontend |
-| `yarn verify --network X` | Contract verification (Hoodiscan for `statusHoodi`) |
-| `yarn account` / `yarn generate` / `yarn account:import` | Deployer key management |
-
----
-
 ## Credits
 
 - Built for **buidl korea** on top of **[Scaffold-ETH 2](https://scaffoldeth.io)**.
