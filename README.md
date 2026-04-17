@@ -1,83 +1,444 @@
-# 🏗 Scaffold-ETH 2
+# ShadowFi
 
-<h4 align="center">
-  <a href="https://docs.scaffoldeth.io">Documentation</a> |
-  <a href="https://scaffoldeth.io">Website</a>
-</h4>
+**Private, gasless, Karma-gated lending on the Status Network.**
 
-🧪 An open-source, up-to-date toolkit for building decentralized applications (dapps) on the Ethereum blockchain. It's designed to make it easier for developers to create and deploy smart contracts and build user interfaces that interact with those contracts.
+ShadowFi is a privacy-first lending primitive. Borrowers keep their primary identity off-chain and borrow through deterministically derived **stealth addresses**. Credit is underwritten by **Karma** (Status Network's non-transferable reputation), and loans are normalized into **fixed-size buckets** so on-chain observers can see loans — but not *your* loans.
 
-> [!NOTE]
-> 🤖 Scaffold-ETH 2 is AI-ready! It has everything agents need to build on Ethereum. Check `.agents/`, `.claude/`, `.opencode` or `.cursor/` for more info.
+It's built to showcase three things that are only practical on Status Network:
 
-⚙️ Built using NextJS, RainbowKit, Hardhat, Wagmi, Viem, and Typescript.
+1. **Protocol-level gasless execution** (via `linea_estimateGas` + Karma). No paymasters, no relayers.
+2. **Karma as sybil-resistant, read-only credit** — no collateral, no KYC, no slashing.
+3. **Practical privacy without heavy ZK** — stealth addresses + bucketing + decoys + off-chain signed permits.
 
-- ✅ **Contract Hot Reload**: Your frontend auto-adapts to your smart contract as you edit it.
-- 🪝 **[Custom hooks](https://docs.scaffoldeth.io/hooks/)**: Collection of React hooks wrapper around [wagmi](https://wagmi.sh/) to simplify interactions with smart contracts with typescript autocompletion.
-- 🧱 [**Components**](https://docs.scaffoldeth.io/components/): Collection of common web3 components to quickly build your frontend.
-- 🔥 **Burner Wallet & Local Faucet**: Quickly test your application with a burner wallet and local faucet.
-- 🔐 **Integration with Wallet Providers**: Connect to different wallet providers and interact with the Ethereum network.
+> Deployed on **Status Network Hoodi** (chain ID `374`).
 
-![Debug Contracts tab](https://github.com/scaffold-eth/scaffold-eth-2/assets/55535804/b237af0c-5027-4849-a5c1-2e31495cccb1)
+---
 
-## Requirements
+## Table of contents
 
-Before you begin, you need to install the following tools:
+- [Why ShadowFi](#why-shadowfi)
+- [How it works](#how-it-works)
+- [Architecture](#architecture)
+- [Smart contracts](#smart-contracts)
+- [Frontend](#frontend)
+- [Tech stack](#tech-stack)
+- [Getting started](#getting-started)
+- [Deploy to Status Hoodi](#deploy-to-status-hoodi)
+- [Deployed addresses](#deployed-addresses-status-hoodi)
+- [Privacy model — what is and isn't private](#privacy-model)
+- [Economic model](#economic-model)
+- [Roadmap](#roadmap)
+- [Project layout](#project-layout)
+- [Credits](#credits)
 
-- [Node (>= v20.18.3)](https://nodejs.org/en/download/)
-- Yarn ([v1](https://classic.yarnpkg.com/en/docs/install/) or [v2+](https://yarnpkg.com/getting-started/install))
-- [Git](https://git-scm.com/downloads)
+---
 
-## Quickstart
+## Why ShadowFi
 
-To get started with Scaffold-ETH 2, follow the steps below:
+Public-ledger DeFi lending leaks an enormous amount of information:
 
-1. Install dependencies if it was skipped in CLI:
+- **Positions are legible.** Anyone can reconstruct your total exposure, strategy, and counterparties.
+- **Reputation requires identity.** Undercollateralized credit usually means KYC, which kills the permissionless premise.
+- **Gas friction rules out agents.** Autonomous lenders and liquidators need to send many small transactions cheaply.
+
+ShadowFi addresses all three with mechanisms that compose natively on Status Network:
+
+| Problem | ShadowFi mechanism |
+| --- | --- |
+| Loans link back to your identity | **Stealth addresses** — one fresh keypair per loan, derived from a signature of your main wallet |
+| Loan sizes leak total exposure | **Bucket-only sizing** (0.1 / 0.5 / 1 ETH). Larger asks are split across independent stealths |
+| Undercollateralized credit needs KYC | **Karma-gated borrowing** — your reputation token sets the cap and the discount |
+| Gas ruins micro-actions and bots | **Gasless fee path** via `linea_estimateGas` on Status Network |
+| Gas top-ups leak the main → stealth edge | **StealthDisperser** — batched, uniform, decoy-padded funding in a single tx |
+
+---
+
+## How it works
+
+End-to-end borrower flow:
 
 ```
-cd my-dapp-example
+┌─────────────┐  sign seed msg  ┌──────────────────┐
+│ Main wallet │ ───────────────▶│ Stealth vault    │  (client-side only)
+│  (Karma)    │                 │  HMAC(seed, idx) │
+└──────┬──────┘                 └────────┬─────────┘
+       │  EIP-712 BorrowPermit            │ derive stealth_i
+       │  (stealth, amount, apr, ...)     ▼
+       │                           ┌───────────────┐
+       │                           │  Stealth_i    │
+       │                           │ (fresh keypair)│
+       │                           └──────┬────────┘
+       │                                  │ requestLoanWithPermit(sig)
+       │                                  ▼
+       │                         ┌──────────────────┐
+       │                         │  BucketLending   │
+       │                         │                  │
+       │                         │  ecrecover(sig)  │
+       │                         │  karma.balanceOf │
+       │                         │  gate + discount │
+       │                         └──────────────────┘
+       ▼
+(main wallet is never a `msg.sender` to BucketLending)
+```
+
+Seven deliberate steps:
+
+1. **Unlock the stealth vault.** Main wallet signs one deterministic message. The signature is hashed into a 32-byte seed stored only in that tab's memory. Fresh stealth keypairs are derived at indices `0, 1, 2…` via HMAC.
+2. **Split big asks into buckets.** A request for `1.3 ETH` becomes `1 + 0.1 + 0.1 + 0.1`, one bucket per stealth, with independent EIP-712 salts.
+3. **Sign a borrow permit per stealth.** Main wallet signs `BorrowPermit(stealth, bucket, baseBps, duration, deadline, salt)` off-chain. The permit authorizes exactly *that* stealth to open exactly *that* bucket.
+4. **(Optional) Batched gas top-up.** If any stealth is *not* on the gasless tier, the UI fans out a uniform top-up to all real stealths **plus decoys** in a single `StealthDisperser.batch(...)` call so observers cannot pair a top-up with a loan amount.
+5. **Stealth submits the loan.** Each stealth calls `requestLoanWithPermit(...)`. The contract `ecrecover`s the signer, reads their Karma via `karma.balanceOf(signer)`, enforces `MIN_KARMA`, borrow cap, and interest discount. **The signer address is never stored or emitted.**
+6. **Lenders fund.** Anyone can `fundLoan(id)` with ETH. When fully funded, principal is auto-transferred to the stealth, `dueTime` is set, and the loan moves to `Funded`. Overpayment is refunded in-call.
+7. **Stealth repays.** The same stealth calls `repayLoan(id)` with `principal + interest`. The contract pro-rata distributes to lenders in the same tx.
+
+The default path (`markDefault`) is permissionless once `dueTime` passes, but has no compensation mechanism — there is no Karma slashing and no collateral to seize. That's deliberate (see [Privacy model](#privacy-model)).
+
+---
+
+## Architecture
+
+```
+packages/
+├── hardhat/                    # Solidity contracts + hardhat-deploy scripts
+│   ├── contracts/
+│   │   ├── BucketLending.sol   # Core lending contract (EIP-712, OZ)
+│   │   ├── StealthDisperser.sol# Batched, decoy-padded gas top-ups
+│   │   └── MockKarma.sol       # Local-only Karma stub (NOT deployed on Hoodi)
+│   ├── deploy/
+│   │   ├── 01_deploy_bucket_lending.ts  # Points at real Karma on Hoodi
+│   │   └── 02_deploy_stealth_disperser.ts
+│   └── hardhat.config.ts       # Networks incl. statusHoodi / statusSepolia
+│
+└── nextjs/                     # Scaffold-ETH 2 frontend
+    ├── app/
+    │   ├── page.tsx            # Landing + pillars + end-to-end timeline
+    │   ├── borrow/             # Permit flow + batched funding UX
+    │   ├── market/             # Open loans + funding
+    │   ├── my-loans/           # Borrower + lender dashboards
+    │   ├── karma/              # Live Karma lookup + borrow preview
+    │   └── agent/              # Autonomous lender (preview / coming soon)
+    ├── components/
+    │   ├── Header.tsx, Footer.tsx
+    │   ├── StealthVault.tsx    # Unlock + preview next stealth
+    │   └── FeeBadge.tsx        # Karma-aware gasless/premium indicator
+    ├── hooks/
+    │   ├── useStealthWallet.ts # Deterministic stealth derivation
+    │   └── useLineaGasQuote.ts # Wraps linea_estimateGas
+    └── utils/
+        ├── chains.ts           # statusHoodi chain def w/ custom fees hook
+        ├── lineaGas.ts         # linea_estimateGas + fallbacks
+        ├── stealthBatchFunding.ts  # StealthDisperser planning + execution
+        └── stealth.ts          # Keypair derivation primitives
+```
+
+---
+
+## Smart contracts
+
+### `BucketLending.sol`
+
+The entire lending primitive. ~395 LOC, `ReentrancyGuard` + `EIP712`.
+
+Key constants (immutable in code, explicit on purpose):
+
+| Constant | Value | Meaning |
+| --- | --- | --- |
+| `MIN_KARMA` | `1 KARMA` | Minimum reputation to borrow any bucket |
+| `KARMA_BORROW_RATE` | `0.05 ETH / KARMA` | Per-bucket borrow cap scales linearly with Karma |
+| `MIN_INTEREST_BPS` | `50` (0.5%) | Floor after Karma-based discount |
+| `INTEREST_DISCOUNT_BPS_PER_KARMA` | `10` (0.1%) | Discount off base rate per 1 Karma |
+| `buckets` | `[0.1, 0.5, 1] ETH` | Only these denominations are valid |
+
+Public surface:
+
+```solidity
+function requestLoanWithPermit(
+    address stealth,
+    uint256 bucketAmount,
+    uint256 baseInterestBps,
+    uint256 duration,
+    uint256 deadline,
+    bytes32 salt,
+    bytes calldata signature
+) external returns (uint256 loanId);
+
+function fundLoan(uint256 loanId) external payable;          // anyone
+function repayLoan(uint256 loanId) external payable;         // stealth only
+function cancelLoan(uint256 loanId) external;                // stealth, if still Open
+function markDefault(uint256 loanId) external;               // anyone, after dueTime
+
+// Views: getLoan, getLoans, getLenders, totalOwed, bucketsList,
+// maxBucket, getMaxBorrow(karmaBalance), getAdjustedInterestBps(baseBps, karma)
+```
+
+The `BorrowPermit` EIP-712 struct:
+
+```
+BorrowPermit(
+  address lending,
+  address stealth,
+  uint256 bucketAmount,
+  uint256 baseInterestBps,
+  uint256 duration,
+  uint256 deadline,
+  bytes32 salt
+)
+```
+
+The `lending` field binds a permit to a specific `BucketLending` address, `salt` makes per-loan digests unique, and `permitUsed[digest]` blocks replay. The signer's address is recovered on-chain but **never stored and never emitted** — it only influences the Karma read, the borrow cap check, and the interest discount.
+
+### `StealthDisperser.sol`
+
+54 LOC. Stateless, permissionless, single function:
+
+```solidity
+function batch(address[] calldata recipients, uint256[] calldata amounts) external payable;
+```
+
+Used by the frontend when any stealth address is **not** on the gasless tier. Instead of sending one `main → stealth_i` transfer per loan (which trivially tags each stealth with the main wallet and leaks bucket sizes via top-up amounts), the UI:
+
+1. Picks `N_real + N_decoy` recipients and shuffles them.
+2. Sends a single `disperser.batch(recipients, amounts)` with a **uniform** per-recipient amount rounded up to a coarse tick.
+3. Results in a fan-out where observers see a set of similarly-funded addresses, not per-loan intent.
+
+### `MockKarma.sol`
+
+Local-only Karma stub with `balanceOf` and a dev-only `award(...)` helper. **Never deployed on Hoodi** — the deploy script points at the real Karma at `0x0700be6f329cc48c38144f71c898b72795db6c1b`.
+
+---
+
+## Frontend
+
+Five user-facing pages:
+
+- **`/borrow`** — Unlock vault → pick amount → auto-split into buckets → sign N permits → (optional) single batched top-up → N `requestLoanWithPermit` calls from N fresh stealths.
+- **`/market`** — All open loans, filterable, with live Karma-aware gasless/premium fee preview before you hit **Fund**. Shows market stats (open requests, total requested/funded, avg APR).
+- **`/my-loans`** — Two tabs. **As borrower**: every stealth you've ever derived scanned for loans (via on-chain `getLoans`), showing open / funded / repaid and outstanding owed. **As lender**: every loan you've funded via on-chain `getLenders(loanId)` multicalls, showing your pro-rata capital out and repaid.
+- **`/karma`** — Looks up `karma.balanceOf(yourMainWallet)` live and previews borrow cap and discount tiers.
+- **`/agent`** (preview) — Client-side lending bot scaffolding. UI is complete; auto-funding is gated off until RLN-backed session signing lands.
+
+Karma-aware gas UX is threaded everywhere it matters through `useLineaGasQuote` + `FeeBadge`, so the user always sees "Gasless" or the exact premium fee before they send.
+
+---
+
+## Tech stack
+
+- **Solidity** 0.8.24, **OpenZeppelin Contracts** (`EIP712`, `ECDSA`, `ReentrancyGuard`)
+- **Hardhat** + **hardhat-deploy** + **hardhat-verify**
+- **Next.js** (App Router) + **TypeScript** + **Tailwind** + **DaisyUI**
+- **wagmi** + **viem** + **RainbowKit**
+- **Scaffold-ETH 2** as the base toolkit (custom hooks, typed contract helpers, auto-ABI export)
+- **Status Network Hoodi** (chain 374), fees estimated via **`linea_estimateGas`** with `eth_estimateGas` fallback
+
+---
+
+## Getting started
+
+### Requirements
+
+- Node **≥ v20.18.3**
+- Yarn (v1 or v2+)
+- Git
+
+### 1. Install
+
+```bash
+git clone <this repo>
+cd korea
 yarn install
 ```
 
-2. Run a local network in the first terminal:
+### 2. Run locally (hardhat node)
 
-```
-yarn chain
-```
+Three terminals:
 
-This command starts a local Ethereum network using Hardhat. The network runs on your local machine and can be used for testing and development. You can customize the network configuration in `packages/hardhat/hardhat.config.ts`.
-
-3. On a second terminal, deploy the test contract:
-
-```
-yarn deploy
+```bash
+yarn chain                 # local hardhat node
+yarn deploy                # deploys BucketLending + StealthDisperser + MockKarma,
+                           # seeds deployer with 20 Karma
+yarn start                 # Next.js at http://localhost:3000
 ```
 
-This command deploys a test smart contract to the local network. The contract is located in `packages/hardhat/contracts` and can be modified to suit your needs. The `yarn deploy` command uses the deploy script located in `packages/hardhat/deploy` to deploy the contract to the network. You can also customize the deploy script.
+On a local network the deploy script drops a **`MockKarma`** so you can exercise the full flow (Karma gating, borrow-cap arithmetic, interest discount) without needing Status Hoodi.
 
-4. On a third terminal, start your NextJS app:
+### 3. Compile / test / lint
+
+```bash
+yarn compile               # hardhat compile
+yarn hardhat:test          # contract tests
+yarn lint
+yarn format
+yarn next:build            # production build of the frontend
+```
+
+---
+
+## Deploy to Status Hoodi
+
+1. Put your deployer private key in `packages/hardhat/.env`:
+
+   ```env
+   DEPLOYER_PRIVATE_KEY=0xabc123...
+   ```
+
+2. Deploy:
+
+   ```bash
+   yarn deploy --network statusHoodi
+   ```
+
+   This will:
+   - **Skip** `MockKarma` and wire `BucketLending` to the real Karma (`0x0700be6f329cc48c38144f71c898b72795db6c1b`).
+   - Deploy `BucketLending` with buckets `[0.1, 0.5, 1 ETH]`.
+   - Deploy `StealthDisperser`.
+   - Regenerate `packages/nextjs/contracts/deployedContracts.ts` so the frontend picks up the new addresses automatically.
+
+3. Verify (optional):
+
+   ```bash
+   yarn verify --network statusHoodi
+   ```
+
+4. Run the frontend against Hoodi:
+
+   ```bash
+   yarn start
+   ```
+
+   `scaffold.config.ts` already targets `statusHoodi` with a `public.hoodi.rpc.status.network` override.
+
+### Network details
+
+```ts
+{
+  name: "Status Network Hoodi",
+  chainId: 374,
+  rpc:  "https://public.hoodi.rpc.status.network",
+  explorer: "https://hoodiscan.status.network",
+  multicall3: "0xcA11bde05977b3631167028862bE2a173976CA11",
+}
+```
+
+The Karma stack on Hoodi (canonical, fixed by Status):
+
+```ts
+karma:        0x0700be6f329cc48c38144f71c898b72795db6c1b
+karmaTiers:   0xb8039632e089dcefa6bbb1590948926b2463b691
+rln:          0x420077c98880a9ebb45296cf7721ab7a5b56bd47
+stakeManager: 0x2bc5b2a5f580064aab6fbc1ee30113cd808582ac
+```
+
+---
+
+## Deployed addresses (Status Hoodi)
+
+Current live deployment used by the frontend. All ShadowFi contracts are **verified on Hoodiscan** — the links go straight to the source tab.
+
+| Contract | Address | Status |
+| --- | --- | --- |
+| `BucketLending` | [`0x2acd323f5a715Af37b9dC0E5e9d79897c9669d8C`](https://hoodiscan.status.network/address/0x2acd323f5a715Af37b9dC0E5e9d79897c9669d8C#code) | ✅ verified |
+| `StealthDisperser` | [`0xca45Eb8CF0fB1Ad779148E3fe15820AD0beD375b`](https://hoodiscan.status.network/address/0xca45Eb8CF0fB1Ad779148E3fe15820AD0beD375b#code) | ✅ verified |
+| `HelloStatusNetwork` (example) | [`0xED6a5C93d576D4A9F66cc2c0b88fDac4A6ed1717`](https://hoodiscan.status.network/address/0xED6a5C93d576D4A9F66cc2c0b88fDac4A6ed1717#code) | ✅ verified |
+| `Karma` (real, Status team) | [`0x0700be6f329cc48c38144f71c898b72795db6c1b`](https://hoodiscan.status.network/address/0x0700be6f329cc48c38144f71c898b72795db6c1b) | — |
+
+### Verifying on Hoodiscan (Blockscout)
+
+Status Hoodi uses **Blockscout**, not Etherscan. `hardhat-verify` works against it through the `customChains` entry in `hardhat.config.ts` (`https://hoodiscan.status.network/api`). Blockscout accepts any non-empty API key.
+
+```bash
+# No-arg contract:
+yarn hardhat:hardhat-verify --network statusHoodi <ADDRESS>
+
+# Contract with array / complex constructor args — use a JS args file:
+yarn workspace @se-2/hardhat hardhat-verify \
+  --network statusHoodi \
+  --constructor-args scripts/verify-args/bucketLending.js \
+  0x2acd323f5a715Af37b9dC0E5e9d79897c9669d8C
+```
+
+The exact args used for the current `BucketLending` deployment are checked in at `packages/hardhat/scripts/verify-args/bucketLending.js`. When you redeploy with new buckets or a different Karma address, update that file before re-verifying.
+
+---
+
+## Privacy model
+
+Be honest about what we do and don't claim:
+
+**What is private**
+
+- Your main wallet is **never** a `msg.sender` to `BucketLending`. All five state-changing functions (`requestLoanWithPermit`, `fundLoan`, `repayLoan`, `cancelLoan`, `markDefault`) can only be called by a stealth.
+- The borrower's Karma-holder address is **never stored** and **never emitted** — only `ecrecover`'d inside a single call.
+- Multi-bucket splits use **independent stealth keypairs** and **fresh EIP-712 salts**, so two loans from the same user are on-chain unrelated.
+- When gasless is unavailable, the **batched disperser** mixes real stealths with decoys and uses a uniform per-recipient amount, breaking the per-loan main→stealth edge.
+
+**What is still observable (and the threat model)**
+
+- The Karma holder's signature sits in the **calldata** of `requestLoanWithPermit`. A determined observer can `ecrecover` it off-chain to recover the signer. Fresh per-permit `salt`s prevent correlation *across* one signer's loans, but do not hide the signer itself. A fully private version requires a ZK proof of "I know an address with Karma ≥ N" — out of scope here.
+- **Lenders are fully on-chain**. `fundLoan` is called from the lender's real wallet. Privacy benefits accrue only to borrowers in this version.
+- **Defaults have no recovery.** Because there's no collateral and no Karma slashing (the real Karma token is read-only for us), lenders bear the full loss on default. This is the correct tradeoff for a privacy-preserving primitive — punishing default via identity-linked slashing would defeat the privacy goal — but it means lending is higher-variance than, say, Aave. Price it in.
+- **Gas top-ups through `StealthDisperser`** still tie the main wallet to the *set* of recipients. It breaks per-loan linkage and hides amounts, not the mere fact that the main wallet has some privacy-preserving activity.
+
+---
+
+## Economic model
+
+Principal + fixed (not annualized) interest. Given a bucket of size `P` and a Karma-adjusted rate `r` bps:
+
+- Borrower owes: `P + P * r / 10_000` over `duration` seconds.
+- Karma discount: `discountBps = karma * 10 / 1e18`, applied off the base rate, floored at `MIN_INTEREST_BPS = 50`.
+- Borrow cap per bucket: `maxBorrow = karma * 0.05 ETH / 1 ETH`. You can still split *across* multiple buckets from multiple stealths, each individually cap-checked.
+- Lender payout on repayment: `contribution_i * (P + interest) / P` — pro-rata on principal share.
+- Lender payout on cancellation (loan never fully funded): `contribution_i` refunded in full.
+- Lender payout on default: **zero**. See [Privacy model](#privacy-model).
+
+---
+
+## Roadmap
+
+Near-term, in order of impact:
+
+- [ ] **Agent mode** — unlock the `/agent` auto-funder behind an RLN-gated client session.
+- [ ] **ZK borrow permits** — replace ECDSA `BorrowPermit` with a zk-SNARK over "I know a Karma ≥ N address" so the signer is never recoverable from calldata.
+- [ ] **Per-loan re-quote at send time** — re-run `linea_estimateGas` just before `requestLoan`/`fundLoan` to avoid stale gasless assumptions when Karma state changes.
+- [ ] **Lender privacy** — mirror the stealth pattern for `fundLoan` so lenders also transact from fresh addresses.
+- [ ] **More buckets + stable unit** — add `0.25 / 2 / 5` ETH and a USDC-denominated variant.
+- [ ] **Subgraph / Ponder indexer** — serve `/market` and `/my-loans` from an index instead of `getLoans()` + per-loan multicall.
+
+---
+
+## Project layout
 
 ```
-yarn start
+korea/
+├── packages/
+│   ├── hardhat/           # Solidity + deploy scripts (see architecture above)
+│   └── nextjs/            # Frontend
+├── .agents/               # AI agent skills + guidance
+├── AGENTS.md              # Coding-agent instructions (SE-2 conventions)
+├── CLAUDE.md              # Pointer to AGENTS.md
+└── README.md              # You are here
 ```
 
-Visit your app on: `http://localhost:3000`. You can interact with your smart contract using the `Debug Contracts` page. You can tweak the app config in `packages/nextjs/scaffold.config.ts`.
+Useful yarn scripts (monorepo root):
 
-Run smart contract test with `yarn hardhat:test`
+| Command | What it does |
+| --- | --- |
+| `yarn chain` | Local hardhat node |
+| `yarn deploy [--network X]` | Deploy all, regenerate frontend ABIs |
+| `yarn start` | Next.js dev server |
+| `yarn compile` | Compile contracts |
+| `yarn hardhat:test` | Run contract tests |
+| `yarn lint` / `yarn format` | Lint + format both packages |
+| `yarn next:build` | Production build of the frontend |
+| `yarn verify --network X` | Contract verification (Hoodiscan for `statusHoodi`) |
+| `yarn account` / `yarn generate` / `yarn account:import` | Deployer key management |
 
-- Edit your smart contracts in `packages/hardhat/contracts`
-- Edit your frontend homepage at `packages/nextjs/app/page.tsx`. For guidance on [routing](https://nextjs.org/docs/app/building-your-application/routing/defining-routes) and configuring [pages/layouts](https://nextjs.org/docs/app/building-your-application/routing/pages-and-layouts) checkout the Next.js documentation.
-- Edit your deployment scripts in `packages/hardhat/deploy`
+---
 
+## Credits
 
-## Documentation
+- Built for **buidl korea** on top of **[Scaffold-ETH 2](https://scaffoldeth.io)**.
+- Runs on **[Status Network](https://status.network)** — gasless execution, Karma reputation, and Linea-style fee estimation.
+- OpenZeppelin Contracts for `EIP712` / `ECDSA` / `ReentrancyGuard`.
 
-Visit our [docs](https://docs.scaffoldeth.io) to learn how to start building with Scaffold-ETH 2.
-
-To know more about its features, check out our [website](https://scaffoldeth.io).
-
-## Contributing to Scaffold-ETH 2
-
-We welcome contributions to Scaffold-ETH 2!
-
-Please see [CONTRIBUTING.MD](https://github.com/scaffold-eth/scaffold-eth-2/blob/main/CONTRIBUTING.md) for more information and guidelines for contributing to Scaffold-ETH 2.
+> ShadowFi is a hackathon project — it is not audited, has no oracle, and has no liquidation mechanism. Do not use it with funds you're not prepared to lose.
