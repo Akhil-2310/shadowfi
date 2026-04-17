@@ -10,8 +10,12 @@ It's built to showcase three things that are only practical on Status Network:
 2. **Karma as sybil-resistant, read-only credit** — no collateral, no KYC, no slashing.
 3. **Practical privacy without heavy ZK** — stealth addresses + bucketing + decoys + off-chain signed permits.
 
-
 ---
+
+## [Live Demo](https://shadowfi-two.vercel.app/)
+
+## [Video Demo](https://www.loom.com/share/00e6f0edf7e24fa4bfc6d2a5f798f712)
+
 
 ## Table of contents
 
