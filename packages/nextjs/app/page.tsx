@@ -44,8 +44,8 @@ const PILLARS: Pillar[] = [
     icon: <SparklesIcon className="h-6 w-6" />,
   },
   {
-    title: "Agentic lenders",
-    body: "Autonomous funding bots monitor new requests and auto-fund ones matching their heuristics. Gasless on Status makes this practical.",
+    title: "Borrow & lend",
+    body: "Borrowers use stealth addresses; lenders fund open buckets from their main wallet on the market and earn principal + interest on repayment. Optional agents auto-fund matching requests.",
     icon: <CpuChipIcon className="h-6 w-6" />,
   },
 ];
@@ -136,11 +136,12 @@ const Home: NextPage = () => {
         <div className="max-w-5xl mx-auto text-center">
           <div className="badge badge-primary badge-outline mb-4">Status Network · Gasless · Karma-gated</div>
           <h1 className="text-4xl md:text-6xl font-bold leading-tight">
-            Private lending, on your reputation — not your wallet.
+            Borrow in stealth. Lend on the market. Reputation is based on KARMA.
           </h1>
           <p className="mt-4 text-lg opacity-80 max-w-3xl mx-auto">
-            A privacy-first lending primitive that combines stealth addresses, fixed-size loan buckets, Karma-based
-            credit, and autonomous lending agents. Onchain observers see loans; they don&apos;t see <em>your</em> loans.
+            ShadowFi is a two-sided credit market on Status Network: borrow through stealth addresses and fixed-size
+            buckets, or fund open requests and earn fixed interest when borrowers repay. Karma gates credit; onchain
+            observers see loans — they don&apos;t see <em>your</em> loans as a borrower.
           </p>
           <div className="flex flex-wrap gap-3 justify-center mt-6">
             <Link href="/borrow" className="btn btn-primary">
@@ -211,8 +212,8 @@ const Home: NextPage = () => {
             <div className="badge badge-outline mb-3">End-to-end flow</div>
             <h2 className="text-2xl md:text-3xl font-bold">How it works</h2>
             <p className="opacity-70 mt-2 max-w-2xl mx-auto text-sm">
-              Seven deliberate steps between &ldquo;I want to borrow&rdquo; and &ldquo;the stealth address
-              repays&rdquo;. Every step keeps the borrower&apos;s main wallet off-chain.
+              Borrower path: from permit to repayment via stealth. Lender path: fund open loans on the market and
+              receive pro-rata payouts when due. Below focuses on the borrower flow — lenders simply connect and fund.
             </p>
           </div>
 
@@ -245,11 +246,12 @@ const Home: NextPage = () => {
                 <div className="max-w-xl">
                   <div className="badge badge-primary badge-outline mb-3">Ready when you are</div>
                   <h2 className="text-2xl md:text-3xl font-bold">
-                    Unlock a vault, sign a permit, walk away with a loan.
+                    Borrow with stealth — or fund the market from your wallet.
                   </h2>
                   <p className="opacity-80 mt-3 text-sm md:text-base">
-                    Your main wallet stays off-chain the entire time. Karma does the underwriting. Stealth addresses do
-                    the borrowing. The Status Network handles gas and spam resistance for you.
+                    Borrowers: unlock a vault, sign permits, repay from stealth — your main wallet never calls the
+                    contract. Lenders: browse open buckets, fund with ETH, earn principal + interest when loans repay.
+                    The Status Network handles Karma-aware gas and spam resistance.
                   </p>
                 </div>
                 <div className="flex flex-col sm:flex-row md:flex-col gap-3">
@@ -284,9 +286,10 @@ const Home: NextPage = () => {
                 <div className="flex items-start gap-2">
                   <ShieldCheckIcon className="h-5 w-5 text-primary mt-0.5 shrink-0" />
                   <div>
-                    <div className="font-semibold">Reputation &gt; collateral</div>
+                    <div className="font-semibold">Karma &amp; yield</div>
                     <div className="opacity-70 text-xs">
-                      Borrow caps and discounts scale with live Karma — no KYC, no deposits.
+                      Borrow caps and rate discounts scale with Karma. Lenders earn fixed interest on repaid loans — no
+                      stealth required to fund.
                     </div>
                   </div>
                 </div>
