@@ -16,6 +16,7 @@ It's built to showcase three things that are only practical on Status Network:
 
 ## [Video Demo](https://www.loom.com/share/00e6f0edf7e24fa4bfc6d2a5f798f712)
 
+## [Slides](https://drive.google.com/file/d/1O-NZ9hQYNILyBRrXmCA7kNj38wh7Npjl/view)
 
 ## Table of contents
 
