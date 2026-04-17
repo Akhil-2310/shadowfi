@@ -6,8 +6,9 @@ import "~~/styles/globals.css";
 import { getMetadata } from "~~/utils/scaffold-eth/getMetadata";
 
 export const metadata = getMetadata({
-  title: "Scaffold-ETH 2 App",
-  description: "Built with 🏗 Scaffold-ETH 2",
+  title: "ShadowFi · Private, Karma-gated lending on Status Network",
+  description:
+    "Private-by-default lending: stealth addresses, bucketed loan sizes, Karma-based credit, and gasless execution on Status Network.",
 });
 
 const ScaffoldEthApp = ({ children }: { children: React.ReactNode }) => {
