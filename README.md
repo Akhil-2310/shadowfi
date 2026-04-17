@@ -1,6 +1,6 @@
 # ShadowFi
 
-**Private, gasless, Karma-gated lending on the Status Network.**
+**Private, gasless, Karma-gated lending borrowing on the Status Network.**
 
 ShadowFi is a privacy-first lending borrowing primitive. Borrowers keep their primary identity off-chain and borrow through deterministically derived **stealth addresses**. Credit is underwritten by **Karma** (Status Network's non-transferable reputation), and loans are normalized into **fixed-size buckets** so on-chain observers can see loans — but not *your* loans.
 
